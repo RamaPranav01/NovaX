@@ -3,7 +3,7 @@ from langchain_core.pydantic_v1 import BaseModel, Field, ValidationError
 from langchain_core.output_parsers import PydanticOutputParser , StrOutputParser
 from langchain_core.runnables import Runnable
 from langchain_google_vertexai import ChatVertexAI
-from typing import Literal, Optional, List
+from typing import Literal, Optional, List , Any ,Dict 
 
 class CriticResponse(BaseModel):
     """A standard response for all critic agents."""
@@ -53,6 +53,15 @@ class HallucinationVerdict(BaseModel):
     confidence_score: float = Field(
         ge=0.0, le=1.0, description="The critic's confidence in its verdict."
     )
+
+class DeepfakeAnalysisConclusion(BaseModel):
+    """The structured conclusion from the deepfake interpreter agent."""
+    conclusion: str = Field(
+        description="A simple, human-readable conclusion about the media's authenticity."
+    )
+    confidence_level: Literal["HIGH", "MEDIUM", "LOW"] = Field(
+        description="The confidence level in the conclusion, derived from the technical data."
+    )    
 
 # --- INITIALIZIng THE CORE AI MODEL (GEMINI) ---
 model = ChatVertexAI(
@@ -435,3 +444,129 @@ async def rewrite_for_deescalation(text_to_rewrite: str) -> str:
     except Exception as e:
         print(f"An error occurred in rewrite_for_deescalation: {e}")
         return text_to_rewrite
+
+# ---"SOURCE REPUTATION CRITIC" AGENT ("The Background Checker") ---
+SOURCE_REPUTATION_SYSTEM_PROMPT = """
+# ROLE & GOAL
+You are an 'AI Communications Analyst'. Your task is to interpret a technical 'Reputation Score' for a news or information source and translate it into a single, clear, human-readable sentence.
+
+# INSTRUCTIONS
+1.  Analyze the provided `reputation_data` dictionary.
+2.  Based on the score, craft a concise, helpful warning or confirmation.
+3.  The tone should be informative and neutral. For low scores, it should be a gentle warning. For high scores, it should be a confirmation of reliability.
+4.  Your output MUST be only the single sentence. Do not add any other text.
+
+# EXAMPLES
+---
+reputation_data: {"score": 25, "max_score": 100, "description": "Lacks accountability, biased."}
+Your Output:
+Warning: This source has a history of unreliable reporting and lacks accountability.
+---
+reputation_data: {"score": 95, "max_score": 100, "description": "High credibility, follows journalistic standards."}
+Your Output:
+Note: This source is generally considered reliable and adheres to high journalistic standards.
+---
+reputation_data: {"score": 60, "max_score": 100, "description": "Mixed reliability."}
+Your Output:
+Note: This source has a mixed record of reliability; consider consulting other sources.
+"""
+
+def get_source_reputation_chain() -> Runnable:
+    """
+    Builds and returns a runnable chain for interpreting source reputation data.
+    """
+    prompt_template = ChatPromptTemplate.from_messages([
+        ("system", SOURCE_REPUTATION_SYSTEM_PROMPT),
+        ("human", "reputation_data: {reputation_data}")
+    ])
+    
+    return prompt_template | model | StrOutputParser()
+
+
+async def analyze_source_reputation(reputation_data: Dict[str, Any]) -> str:
+    """
+    Translates a technical reputation score into a human-readable warning.
+
+    Args:
+        reputation_data: A dictionary containing score info (e.g., from NewsGuard).
+
+    Returns:
+        A single, user-friendly sentence describing the source's reputation.
+    """
+    try:
+        reputation_chain = get_source_reputation_chain()
+        reputation_str = str(reputation_data) 
+        
+        analysis = await reputation_chain.ainvoke({"reputation_data": reputation_str})
+        return analysis
+    except Exception as e:
+        print(f"An error occurred in analyze_source_reputation: {e}")
+        return "Could not analyze the reputation of the source at this time."
+
+# ---"DEEPFAKE DETECTION INTERPRETER" AGENT ("The forensics expert") ---
+
+DEEPFAKE_INTERPRETER_SYSTEM_PROMPT = """
+# ROLE & GOAL
+You are a 'Digital Forensics Analyst'. Your task is to interpret a technical JSON report from a deepfake detection tool and translate it into a simple, human-readable conclusion for a non-technical audience.
+
+# INSTRUCTIONS
+1.  Analyze the provided `analysis_data` JSON report.
+2.  Pay attention to the `confidence_score` (0.0 to 1.0) and the list of `artifact_traces`.
+3.  Synthesize this data into a clear, one-sentence conclusion.
+4.  Determine a confidence level (HIGH, MEDIUM, LOW) for your conclusion. A high score (> 0.85) indicates HIGH confidence. A score between 0.6 and 0.85 indicates MEDIUM confidence.
+5.  Your response must be a valid JSON object conforming to the schema.
+
+# EXAMPLES
+---
+analysis_data: {"confidence_score": 0.97, "artifact_traces": ["unnatural_eye_reflection", "splicing_edge_noise"]}
+Your JSON Response:
+{{"conclusion": "This media shows strong indicators of being AI-generated or digitally manipulated.", "confidence_level": "HIGH"}}
+---
+analysis_data: {"confidence_score": 0.72, "artifact_traces": ["inconsistent_lighting"]}
+Your JSON Response:
+{{"conclusion": "This media shows some potential indicators of digital manipulation.", "confidence_level": "MEDIUM"}}
+---
+analysis_data: {"confidence_score": 0.15, "artifact_traces": []}
+Your JSON Response:
+{{"conclusion": "No clear indicators of AI generation or manipulation were detected.", "confidence_level": "LOW"}}
+
+# RESPONSE SCHEMA
+{format_instructions}
+"""
+
+def get_deepfake_interpreter_chain() -> Runnable:
+    """
+    Builds and returns a runnable chain for interpreting deepfake analysis data.
+    """
+    parser = PydanticOutputParser(pydantic_object=DeepfakeAnalysisConclusion)
+    
+    prompt_template = ChatPromptTemplate.from_messages([
+        ("system", DEEPFAKE_INTERPRETER_SYSTEM_PROMPT),
+        ("human", "analysis_data: {analysis_data}")
+    ]).partial(format_instructions=parser.get_format_instructions())
+    
+    return prompt_template | model | parser
+
+
+async def interpret_deepfake_analysis(analysis_data: Dict[str, Any]) -> DeepfakeAnalysisConclusion:
+    """
+    Translates a technical deepfake analysis report into a simple conclusion.
+
+    Args:
+        analysis_data: The raw JSON dictionary from a deepfake detection API.
+
+    Returns:
+        A DeepfakeAnalysisConclusion object with the simple verdict.
+    """
+    try:
+        interpreter_chain = get_deepfake_interpreter_chain()
+        analysis_str = str(analysis_data)
+        
+        conclusion = await interpreter_chain.ainvoke({"analysis_data": analysis_str})
+        return conclusion
+    except Exception as e:
+        print(f"An error occurred in interpret_deepfake_analysis: {e}")
+        return DeepfakeAnalysisConclusion(
+            conclusion="Analysis could not be completed due to an error.",
+            confidence_level="LOW"
+        )
