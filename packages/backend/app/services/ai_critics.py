@@ -570,3 +570,165 @@ async def interpret_deepfake_analysis(analysis_data: Dict[str, Any]) -> Deepfake
             conclusion="Analysis could not be completed due to an error.",
             confidence_level="LOW"
         )
+
+
+class EducationalContent(BaseModel):
+    """
+    Represents the data structure for an educational module fetched from the database.
+    NOTE FOR DEV 4: This Pydantic model should mirror the SQLAlchemy model for the
+    'educational_content' table.
+    """
+    threat_type: str
+    title: str
+    explanation: str
+    example: str
+
+class LogEntry(BaseModel):
+    """
+    Defines the expected structure for a single log entry passed to the briefing agent.
+    This ensures data consistency and type safety.
+    """
+    timestamp: str
+    threat_type: str
+    severity: Literal["INFO", "LOW", "MEDIUM", "HIGH", "CRITICAL"]
+    source_ip: str
+    user_id: str
+
+
+EDUCATIONAL_CONTENT_SYSTEM_PROMPT = """
+# ROLE & GOAL
+You are Nova, a friendly and helpful AI security assistant. Your goal is to educate a user about a potential security issue with their query without being alarming or accusatory. Your tone must be supportive and educational.
+
+# TASK
+A user's query has been flagged for a potential threat. You will be given context about the threat and the user's query. Your task is to synthesize this information into a brief, clear, and helpful message for the user.
+
+# INSTRUCTIONS
+1.  Start with a friendly, positive tone (e.g., 'For your awareness, Nova noticed...').
+2.  Briefly explain the general issue using the provided 'Explanation'. Do not use jargon.
+3.  Gently explain *why* their specific query might have been flagged in relation to this issue.
+4.  Conclude with a helpful, constructive tip on how to rephrase their query for better, safer results.
+5.  Keep the entire response to under 100 words.
+6.  Your output must ONLY be the final message. Do not add any commentary or greetings.
+"""
+
+def get_educational_content_chain() -> Runnable:
+    """
+    Builds and returns a runnable chain for generating educational content.
+    """
+    prompt_template = ChatPromptTemplate.from_messages([
+        ("system", EDUCATIONAL_CONTENT_SYSTEM_PROMPT),
+        (
+            "human",
+            "--- CONTEXT ---\n"
+            "Threat Name: {title}\n"
+            "Explanation: {explanation}\n"
+            "Generic Example: {example}\n\n"
+            "--- USER'S FLAGGED QUERY ---\n"
+            "'{user_query}'"
+        )
+    ])
+    
+    return prompt_template | model | StrOutputParser()
+
+async def generate_educational_content(
+    content_module: EducationalContent, user_query: str
+) -> str:
+    """
+    Generates a tailored, user-friendly educational message about a detected AI threat.
+    This agent is designed to directly address the hackathon's "educate users" objective.
+
+    Args:
+        content_module: A Pydantic object containing the pre-written educational
+                        content for a specific threat, fetched from the database.
+        user_query: The specific user query that was flagged.
+
+    Returns:
+        A string containing the educational message, or a fallback error message.
+    """
+    try:
+        if not content_module:
+            # This case should ideally be handled before calling this function
+            return "An alert was triggered, but an educational explanation could not be generated."
+
+        content_chain = get_educational_content_chain()
+        
+        message = await content_chain.ainvoke({
+            "title": content_module.title,
+            "explanation": content_module.explanation,
+            "example": content_module.example,
+            "user_query": user_query
+        })
+        return message.strip()
+        
+    except Exception as e:
+        print(f"An unexpected error occurred in generate_educational_content: {e}")
+        return "We detected a potential issue with your query, but couldn't generate a detailed explanation at this time."
+
+
+
+SECURITY_BRIEFING_SYSTEM_PROMPT = """
+# PERSONA & GOAL
+You are 'Nova Analyst', a senior AI cybersecurity analyst reporting to the system administrator. Your task is to analyze a provided list of security logs and generate a concise, insightful, and actionable Threat Intelligence Briefing. Your tone is professional, direct, and data-driven.
+
+# TASK
+Analyze the provided JSON list of security logs from the Nova Gateway. Synthesize the raw data into a high-level executive briefing in Markdown format. The goal is to give the administrator a quick understanding of the threat landscape and what actions to take.
+
+# BRIEFING STRUCTURE & REQUIREMENTS
+Your output must be a single Markdown document with the following sections:
+
+## Executive Summary
+A 2-3 sentence overview. State the most significant threat actor or trend and assign an overall threat level (e.g., LOW, ELEVATED, HIGH, CRITICAL) for the period.
+
+## Key Threat Trends
+Identify and describe the top 2-3 most important patterns. Do not just list events; synthesize them. Look for:
+- A spike in a specific threat type (e.g., "A 300% increase in Prompt Injection attempts was observed.").
+- Coordinated activity from a single source IP or user.
+- A cluster of different events in a short time period, which might indicate a multi-stage attack attempt.
+
+## Noteworthy Events
+Provide a bulleted list of the most critical or unusual individual events that require attention. Include timestamp, threat type, and source IP for each.
+
+## Recommended Actions
+Suggest 1-2 concrete, actionable steps the administrator should take *immediately*. These should be direct and easy to understand.
+- Example: "1. **Investigate and Block IP:** The IP address `198.51.100.12` should be investigated and considered for a temporary block due to repeated, high-severity injection attempts."
+- Example: "2. **Review User Activity:** The activity for `user-789` should be audited, as their session correlated with multiple PII leak warnings."
+"""
+
+def get_security_briefing_chain() -> Runnable:
+    """
+    Builds and returns a runnable chain for generating a security briefing.
+    """
+    prompt_template = ChatPromptTemplate.from_messages([
+        ("system", SECURITY_BRIEFING_SYSTEM_PROMPT),
+        ("human", "Please generate the briefing based on the following security logs:\n\n```json\n{log_data_json}\n```")
+    ])
+    
+    return prompt_template | model | StrOutputParser()
+
+async def generate_security_briefing(log_data: List[LogEntry]) -> str:
+    """
+    Analyzes security logs and generates a human-readable threat intelligence briefing.
+    This is a powerful V3 feature for providing strategic insights to admins.
+
+    Args:
+        log_data: A list of LogEntry Pydantic objects.
+
+    Returns:
+        A markdown-formatted string containing the security briefing.
+    """
+    if not log_data:
+        return "## Nova Security Briefing\n\nNo significant security events were recorded in this period. The system is operating normally."
+
+    try:
+        # Convert Pydantic objects to a list of dicts for clean JSON serialization
+        log_data_dicts = [log.dict() for log in log_data]
+        log_data_json = json.dumps(log_data_dicts, indent=2)
+
+        briefing_chain = get_security_briefing_chain()
+        
+        briefing = await briefing_chain.ainvoke({"log_data_json": log_data_json})
+        return briefing.strip()
+
+    except Exception as e:
+        print(f"An unexpected error occurred in generate_security_briefing: {e}")
+        return "## Briefing Generation Failed\n\nAn error occurred while analyzing the security logs. Please check the system logs for more details."
