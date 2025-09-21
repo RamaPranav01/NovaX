@@ -68,11 +68,9 @@ Nova operates on a hybrid, tiered defense architecture designed for the perfect 
 
 ## 🛠️ Tech Stack
 
-This project is built as a **Google Cloud Native** platform, showcasing the power and versatility of the Google ecosystem.
+This project showcases the power and versatility of the Google ecosystem.
 
-**Cloud & AI Platform:**
-![Google Cloud](https://img.shields.io/badge/Google_Cloud-4285F4?logo=googlecloud)
-![Vertex AI](https://img.shields.io/badge/Vertex_AI-4A4A4A?logo=googlecloud)
+**AI Platform:**
 ![Google Gemini](https://img.shields.io/badge/Google_Gemini-8E44AD?logo=google)
 
 **Backend:**
