@@ -272,7 +272,7 @@ export const analyticsAPI = {
     };
   },
 
-  getThreatsOverTime: async (timeframe: string = '24h'): Promise<AnalyticsData['threats_over_time']> => {
+  getThreatsOverTime: async (_timeframe: string = '24h'): Promise<AnalyticsData['threats_over_time']> => {
     // Mock data for now - replace with actual API call when backend is ready
     const mockData = [
       { timestamp: "2024-01-15T00:00:00Z", count: 2 },
@@ -306,7 +306,7 @@ export const analyticsAPI = {
 
 // Logs API calls - Using mock data until backend endpoints are implemented
 export const logsAPI = {
-  getLogs: async (page: number = 1, limit: number = 50, filters?: Record<string, string>): Promise<{
+  getLogs: async (page: number = 1, _limit: number = 50, _filters?: Record<string, string>): Promise<{
     logs: LogEntry[];
     total: number;
     page: number;
@@ -357,13 +357,13 @@ export const logsAPI = {
     };
   },
 
-  freezeThreat: async (logId: string): Promise<void> => {
+  freezeThreat: async (_logId: string): Promise<void> => {
     // Mock implementation - replace with actual API call when backend is ready
-    console.log(`Freezing threat for log ID: ${logId}`);
+    console.log(`Freezing threat for log ID: ${_logId}`);
     return Promise.resolve();
   },
 
-  verifyLogIntegrity: async (logId: string): Promise<{
+  verifyLogIntegrity: async (_logId: string): Promise<{
     is_valid: boolean;
     hash_verified: boolean;
   }> => {

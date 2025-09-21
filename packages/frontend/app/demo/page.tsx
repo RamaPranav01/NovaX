@@ -12,6 +12,19 @@ import Link from "next/link";
 import { TrustWarningCard } from "@/components/demo/trust-warning-card";
 import { MultiModalUpload } from "@/components/demo/multi-modal-upload";
 
+interface InboundCheck {
+  verdict: "SAFE" | "MALICIOUS";
+  reasoning: string;
+  confidence_score: number;
+  attack_type: string;
+}
+
+interface OutboundCheck {
+  verdict: "PASS" | "FAIL";
+  reasoning: string;
+  confidence_score: number;
+}
+
 interface Message {
   id: string;
   text: string;
@@ -22,17 +35,8 @@ interface Message {
   trustVerdict?: "SUPPORTED" | "CONTRADICTED" | "UNVERIFIED";
   trustConfidence?: number;
   trustSources?: string[];
-  inboundCheck?: {
-    verdict: "SAFE" | "MALICIOUS";
-    reasoning: string;
-    confidence_score: number;
-    attack_type: string;
-  };
-  outboundCheck?: {
-    verdict: "PASS" | "FAIL";
-    reasoning: string;
-    confidence_score: number;
-  };
+  inboundCheck?: InboundCheck;
+  outboundCheck?: OutboundCheck;
 }
 
 export default function DemoPage() {
@@ -63,7 +67,7 @@ export default function DemoPage() {
     return () => window.removeEventListener('scroll', handleScroll);
   }, []);
 
-  const addMessage = (messages: Message[], setMessages: (messages: Message[]) => void, text: string, sender: "user" | "ai", status?: "blocked" | "warning" | "success", reason?: string, trustData?: { verdict: "SUPPORTED" | "CONTRADICTED" | "UNVERIFIED"; confidence: number; sources: string[] }, inboundCheck?: any, outboundCheck?: any) => {
+  const addMessage = (messages: Message[], setMessages: (messages: Message[]) => void, text: string, sender: "user" | "ai", status?: "blocked" | "warning" | "success", reason?: string, trustData?: { verdict: "SUPPORTED" | "CONTRADICTED" | "UNVERIFIED"; confidence: number; sources: string[] }, inboundCheck?: InboundCheck, outboundCheck?: OutboundCheck) => {
     const newMessage: Message = {
       id: Date.now().toString(),
       text,
@@ -98,13 +102,13 @@ export default function DemoPage() {
       let aiResponse = "";
       let reason = "";
       let trustData: { verdict: "SUPPORTED" | "CONTRADICTED" | "UNVERIFIED"; confidence: number; sources: string[] } | undefined;
-      let inboundCheck: any = {
+      let inboundCheck: InboundCheck = {
         verdict: "SAFE" as const,
         reasoning: "No threats detected",
         confidence_score: 0.1,
         attack_type: "none"
       };
-      let outboundCheck: any = {
+      let outboundCheck: OutboundCheck = {
         verdict: "PASS" as const,
         reasoning: "Response complies with policy",
         confidence_score: 0.1
