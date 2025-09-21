@@ -1,37 +1,32 @@
-# --- The Golden Rule: IGNORE ALL ENVIRONMENT FILES ---
-# This is the most important line. It prevents your secret API keys
-# from ever being committed to the repository.
+
 .env
 .env*.local
 
-# --- Python / Backend Specific ---
-# Virtual environment folder created by Poetry
+
 .venv/
-# Python cache files
+
 __pycache__/
 *.py[cod]
 *$py.class
 
-# --- Node.js / Frontend Specific ---
-# The massive node_modules folder
+
 node_modules/
-# Build output
+
 .next/
 out/
 build/
 
-# Log files
+
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
 pnpm-debug.log*
 
-# --- General ---
-# IDE / Editor specific
+
 .vscode/
 .idea/
 
-# macOS specific
+
 .DS_Store
 
 credentials.json

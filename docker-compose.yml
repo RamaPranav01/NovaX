@@ -1,0 +1,58 @@
+# docker-compose.yml
+# Final, STABLE version for local testing.
+
+services:
+  postgres:
+    image: postgres:15-alpine
+    restart: always
+    environment:
+      POSTGRES_DB: nova_db
+      POSTGRES_USER: novausr
+      POSTGRES_PASSWORD: novapassword
+    volumes:
+      - postgres_data_v2:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U novausr -d nova_db"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  qdrant:
+    image: qdrant/qdrant:latest
+    restart: always
+    volumes:
+      - qdrant_data_v2:/qdrant/storage
+    ports:
+      - "6333:6333"
+      - "6334:6334"
+
+  backend:
+    build:
+      context: ./packages/backend
+      dockerfile: Dockerfile
+    restart: always
+    env_file:
+      - ./packages/backend/.env
+    ports:
+      - "8000:8000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      qdrant:
+        condition: service_started
+    volumes:
+      - ./packages/backend/app:/app/app
+      - ./packages/backend/alembic:/app/alembic
+      - ./packages/backend/alembic.ini:/app/alembic.ini
+
+    # --- THIS IS THE FINAL FIX ---
+    # The 'command' is removed. This forces the container to use the stable
+    # CMD from the Dockerfile, which does NOT use --reload. This will give
+    # us a stable server that remembers the cache state between requests.
+
+# Docker Volumes
+volumes:
+  postgres_data_v2:
+  qdrant_data_v2:

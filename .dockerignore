@@ -1,0 +1,29 @@
+Ignore Git history
+.git
+
+Ignore Docker-specific files
+.dockerignore
+Dockerfile
+docker-compose.yml
+
+Ignore IDE and editor folders
+.vscode/
+.idea/
+
+--- Python / Backend Specific Ignores ---
+Ignore the local virtual environment
+.venv
+pycache/
+*.pyc
+*.pyo
+*.pyd
+.pytest_cache/
+
+--- Node.js / Frontend Specific Ignores ---
+This is the biggest one!
+node_modules/
+.next/
+.swc/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
