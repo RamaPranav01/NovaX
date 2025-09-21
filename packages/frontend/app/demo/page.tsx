@@ -340,7 +340,7 @@ export default function DemoPage() {
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
           {/* Protected Side */}
           <Card className="h-[600px] flex flex-col border-green-500/20 bg-gradient-to-br from-green-500/5 to-green-500/10 hover:shadow-lg transition-all duration-300">
-            <CardHeader className="pb-3">
+            <CardHeader className="pb-3 flex-shrink-0">
               <CardTitle className="flex items-center space-x-2">
                 <Shield className="h-5 w-5 text-green-500" />
                 <span>Protected with Nova</span>
@@ -353,9 +353,9 @@ export default function DemoPage() {
                 Real-time threat detection and policy enforcement
               </CardDescription>
             </CardHeader>
-            <CardContent className="flex-1 flex flex-col p-0">
+            <CardContent className="flex-1 flex flex-col p-0 min-h-0">
               {/* Messages */}
-              <div className="flex-1 overflow-y-auto p-4 space-y-3">
+              <div className="flex-1 overflow-y-auto p-4 space-y-3 min-h-0">
                 {protectedMessages.map((message) => (
                   <div
                     key={message.id}
@@ -418,7 +418,7 @@ export default function DemoPage() {
               </div>
 
               {/* Input */}
-              <form onSubmit={handleProtectedSubmit} className="p-4 border-t">
+              <form onSubmit={handleProtectedSubmit} className="p-4 border-t flex-shrink-0">
                 <div className="flex space-x-2">
                   <Input
                     value={protectedInput}
@@ -437,7 +437,7 @@ export default function DemoPage() {
 
           {/* Unprotected Side */}
           <Card className="h-[600px] flex flex-col border-red-500/20 bg-gradient-to-br from-red-500/5 to-red-500/10 hover:shadow-lg transition-all duration-300">
-            <CardHeader className="pb-3">
+            <CardHeader className="pb-3 flex-shrink-0">
               <CardTitle className="flex items-center space-x-2">
                 <AlertTriangle className="h-5 w-5 text-red-500" />
                 <span>Unprotected AI</span>
@@ -450,9 +450,9 @@ export default function DemoPage() {
                 No security layer - vulnerable to threats
               </CardDescription>
             </CardHeader>
-            <CardContent className="flex-1 flex flex-col p-0">
+            <CardContent className="flex-1 flex flex-col p-0 min-h-0">
               {/* Messages */}
-              <div className="flex-1 overflow-y-auto p-4 space-y-3">
+              <div className="flex-1 overflow-y-auto p-4 space-y-3 min-h-0">
                 {unprotectedMessages.map((message) => (
                   <div
                     key={message.id}
@@ -476,7 +476,7 @@ export default function DemoPage() {
               </div>
 
               {/* Input */}
-              <form onSubmit={handleUnprotectedSubmit} className="p-4 border-t">
+              <form onSubmit={handleUnprotectedSubmit} className="p-4 border-t flex-shrink-0">
                 <div className="flex space-x-2">
                   <Input
                     value={unprotectedInput}
