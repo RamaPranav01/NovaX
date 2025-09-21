@@ -1,37 +1,73 @@
 "use client";
 
 import { useState } from "react";
+import { useRouter } from "next/navigation";
+import { useAuth } from "@/context/AuthContext"; 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
 import Link from "next/link";
-import { Shield } from "lucide-react";
+import { Shield, AlertTriangle } from "lucide-react";
 
 export default function LoginPage() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null); 
+
+  const router = useRouter();
+  const { login } = useAuth(); 
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsLoading(true);
+    setError(null);
+
+    const apiUrl = process.env.NEXT_PUBLIC_API_URL;
+    if (!apiUrl) {
+      setError("API URL is not configured. Please contact support.");
+      setIsLoading(false);
+      return;
+    }
+
+    const formData = new URLSearchParams();
+    formData.append("username", email);
+    formData.append("password", password);
 
     try {
-      // TODO: Implement actual login logic with backend when auth endpoints are ready
-      console.log("Login attempt:", { email, password });
+      // The full, correct path to the login endpoint.
+      const response = await fetch(`${apiUrl}/api/v1/login`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/x-www-form-urlencoded",
+        },
+        body: formData.toString(),
+      });
+
+      if (!response.ok) {
+        // Handle failed login attempts (e.g., wrong password)
+        const errorData = await response.json();
+        throw new Error(errorData.detail || "Login failed. Please check your credentials.");
+      }
+
+      // On success, get the token and update the auth state
+      const tokenData = await response.json();
+      login(tokenData.access_token);
       
-      // For now, simulate successful login
-      setTimeout(() => {
-        setIsLoading(false);
-        // Redirect to dashboard on successful login
-        window.location.href = '/dashboard';
-      }, 1000);
-    } catch (error) {
-      console.error("Login error:", error);
+      // Redirect to the interactive demo page
+      router.push("/demo");
+
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : "An unknown error occurred during login.";
+      console.error("Login error:", errorMessage);
+      setError(errorMessage);
+    } finally {
       setIsLoading(false);
     }
   };
+
+  // --- The JSX below remains unchanged, with the addition of the error display ---
 
   return (
     <div className="space-y-6">
@@ -56,6 +92,15 @@ export default function LoginPage() {
         </CardHeader>
         <CardContent className="space-y-4">
           <form onSubmit={handleSubmit} className="space-y-4">
+            
+            {/* --- NEW: Error Message Display --- */}
+            {error && (
+              <div className="flex items-center space-x-2 rounded-md bg-destructive/10 p-3 text-sm text-destructive">
+                <AlertTriangle className="h-4 w-4" />
+                <p>{error}</p>
+              </div>
+            )}
+            
             <div className="space-y-2">
               <Label htmlFor="email" className="text-foreground">Email</Label>
               <Input
@@ -95,4 +140,4 @@ export default function LoginPage() {
       </Card>
     </div>
   );
-} 
+}

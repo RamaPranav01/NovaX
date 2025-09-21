@@ -1,31 +1,36 @@
-from pydantic import BaseModel, Field
-from typing import Dict, Any
+from sqlalchemy import Column, Integer, String, DateTime, JSON
+from sqlalchemy.sql import func
+from app.db.base_class import Base
 
-# This file contains the Pydantic models for your API data shapes.
-
-class LogCreate(BaseModel):
-    """Pydantic model for creating a new log."""
-    request_data: Dict[str, Any] = Field(..., example={"prompt": "What is the capital of France?"})
-    response_data: Dict[str, Any] = Field(..., example={"llm_response": "The capital of France is Paris."})
-    verdict: str = Field(..., example="ALLOWED")
-
-
-class Log(BaseModel):
+class Log(Base):
     """
-    Pydantic model for reading a log from the database.
-    This includes all database-generated fields.
+    SQLAlchemy model for storing cryptographically-chained log entries.
     """
-    id: int
-    request_data: Dict[str, Any]
-    response_data: Dict[str, Any]
-    verdict: str
-    log_hash: str
-    previous_log_hash: str | None
-    created_at: Any # Using 'Any' for datetime from DB is common for simplicity
+    __tablename__ = "logs"
 
-    # --- THIS IS THE FINAL FIX ---
-    # This 'Config' class with 'from_attributes = True' is the magic instruction.
-    # It tells Pydantic that it's okay to read data from a database object (like a SQLAlchemy model)
-    # and not just from a dictionary. This will fix the 500 Internal Server Error.
-    class Config:
-        from_attributes = True
+    id = Column(Integer, primary_key=True, index=True)
+
+    # Core transaction details from the gateway
+    request_data = Column(JSON, nullable=False)
+    response_data = Column(JSON, nullable=False)
+    verdict = Column(String, index=True, nullable=False)
+
+    # --- V2 Columns for Immutable Chain ---
+
+    # The SHA-256 hash of the current log entry's critical data.
+    # Indexed for faster verification queries.
+    log_hash = Column(String, unique=True, nullable=False, index=True)
+
+    # The SHA-256 hash of the *previous* log entry, forming the chain.
+    # This is nullable ONLY for the very first log (the "genesis block").
+    previous_log_hash = Column(String, unique=True, nullable=True, index=True)
+
+    # --- End V2 Columns ---
+
+    # Timestamps
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+
+
+
+

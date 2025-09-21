@@ -1,63 +1,52 @@
+# PURPOSE:
+# This file is the master orchestrator for the Nova API. It integrates all the
+# AI agents built by Developer 2 (the AI Logic Architect) into a cohesive,
+# end-to-end pipeline.
+
+
 import asyncio
-import os
 from fastapi import APIRouter, HTTPException, status, Depends
 from pydantic import BaseModel, Field
-from typing import List, Dict, Any, Optional
+from typing import List, Optional
 from sqlalchemy.orm import Session
-# 1. V1 & V2 Components: Security, Auth, Logging, and Dependencies
-import openai
-from . import deps  # Use relative import for the local deps file
-from app.schemas.user import User # Import the SQLAlchemy User model, which deps provides
-from app.services.ai_critics import check_prompt_injection, check_custom_policy, SecurityCritic_Response, PolicyCritic_Response
+from . import deps
+from app.schemas.user import User
 from app.crud import crud_log
 from app.models import log as log_models
 
-# 2. V2 Components: The new external search client
-from app.services.external.serper_client import serper_client
+from app.services.ai_critics import (
+    check_prompt_injection,
+    check_custom_policy,
+    extract_verifiable_claim,
+    verify_claim_with_sources,
+    check_for_hallucinations,
+    SecurityCritic_Response,
+    PolicyCritic_Response,
+    ClaimExtractorResponse,
+    VerificationResponse,
+    HallucinationVerdict
+)
+from app.services.tools import web_search
+from app.services.ai_critics import model as primary_llm
 
-# --- OpenAI Client Initialization ---
-try:
-    client = openai.AsyncOpenAI(api_key=os.environ.get("OPENAI_API_KEY"))
-except TypeError:
-    client = None
-
-# --- (MOCKED) AI Logic Functions from Dev 2 (AI Specialist) ---
-# In a real sprint, these would be imported from a separate services file.
-async def extract_verifiable_claim(text: str) -> Optional[str]:
-    """(Placeholder) Simulates AI logic from Dev 2 to find a factual claim in text."""
-    print(f"MOCK: Extracting verifiable claim from text...")
-    await asyncio.sleep(0.2)
-    if "fastest growth in semiconductor history" in text:
-        return "NVIDIA's revenue growth is the fastest in semiconductor history"
-    return None
-
-async def verify_claim_with_sources(claim: str, sources: List[Dict[str, Any]]) -> Dict[str, Any]:
-    """(Placeholder) Simulates AI logic from Dev 2 to verify a claim against search results."""
-    print(f"MOCK: Verifying claim '{claim}' with {len(sources)} sources...")
-    await asyncio.sleep(0.3)
-    return {
-        "status": "Likely True",
-        "reasoning": "Multiple reputable financial news outlets corroborate the rapid growth, although the 'fastest ever' claim is difficult to verify definitively.",
-        "supporting_sources": [src.get('link') for src in sources[:2] if src.get('link')]
-    }
-
-# --- V2 Pydantic Models: Upgraded for the new feature ---
 
 class GatewayRequest(BaseModel):
     prompt: str = Field(..., example="What is the latest report on NVDA stock?")
     policy: str = Field(default="Default policy: Be helpful and harmless.", example="Do not give financial advice.")
 
 class RumorVerifierResult(BaseModel):
-    status: str
-    claim: str
-    reasoning: str
-    supporting_sources: List[str] = Field(default_factory=list)
+    """Stores the result of the full Claim -> Search -> Verify pipeline."""
+    verdict: str = Field(..., description="The final verdict from the Synthesizing Verifier (e.g., SUPPORTED, CONTRADICTED).")
+    claim: str = Field(..., description="The specific claim that was investigated.")
+    reasoning: str = Field(..., description="The reasoning provided by the verifier agent.")
+    sources_consulted: List[str] = Field(default_factory=list, description="The list of source snippets used for verification.")
 
 class GatewayResponse(BaseModel):
-    """The unified response model, including both V1 and V2 checks."""
+    """The unified response model, including all V1 and V2 checks."""
     llm_response: str
     inbound_check: SecurityCritic_Response
     outbound_check: PolicyCritic_Response
+    hallucination_check: HallucinationVerdict
     rumor_verifier: Optional[RumorVerifierResult] = None
 
 # --- API Router ---
@@ -66,28 +55,28 @@ router = APIRouter()
 @router.post("/nova-chat", response_model=GatewayResponse, tags=["Gateway V2"])
 async def nova_chat(
     request: GatewayRequest,
-    db: Session = Depends(deps.get_db), # <-- FINAL FIX: Correctly gets the DB session from deps.py
+    db: Session = Depends(deps.get_db),
     current_user: User = Depends(deps.get_current_user)
 ):
     """
-    The main V2 endpoint for the Nova gateway, requiring authentication.
+    The main V2 endpoint for the Nova gateway.
     This is the master orchestration pipeline:
     1. V1 Inbound Security Check (Prompt Injection)
     2. Core LLM Call
-    3. V2 Rumor Verifier Flow (Extract Claim -> Search -> Verify)
-    4. V1 Outbound Security Check (Custom Policy)
-    5. V2 Immutable Logging
+    3. V2 Parallel Critics (Claim Extraction & Hallucination Check)
+    4. V2 Web Search & Verification (if a claim is found)
+    5. V1 Outbound Policy Check
+    6. V2 Immutable Logging of all results
     """
-    if not client:
-        raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="OpenAI client not configured.")
+    if not primary_llm:
+        raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="Primary Language Model client not configured.")
 
-    # --- 1. V1 Inbound Check: Prompt Injection ---
+    # --- 1. Inbound Check: Prompt Injection ---
     security_check = await check_prompt_injection(request.prompt)
     if security_check.verdict == "MALICIOUS":
-        # Log the malicious attempt using our new immutable log CRUD function
         log_entry = log_models.LogCreate(
             request_data={"prompt": request.prompt, "policy": request.policy},
-            response_data={"detail": f"Prompt rejected as potentially malicious. Reason: {security_check.reasoning}"},
+            response_data={"detail": f"Prompt rejected. Reason: {security_check.reasoning}"},
             verdict="BLOCKED"
         )
         crud_log.create_log(db=db, log_in=log_entry)
@@ -96,49 +85,67 @@ async def nova_chat(
             detail=f"Prompt rejected. Reason: {security_check.reasoning}"
         )
 
-    # --- 2. Core AI Call ---
     try:
-        main_llm_response = await client.chat.completions.create(
-            model="gpt-4-turbo",
-            messages=[{"role": "user", "content": request.prompt}]
-        )
-        llm_text_response = main_llm_response.choices[0].message.content or "No response from model."
+        llm_response = await primary_llm.ainvoke(request.prompt)
+        llm_text_response = llm_response.content
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error calling primary LLM: {e}")
 
-    # --- 3. V2 Rumor Verifier Flow ---
-    claim = await extract_verifiable_claim(llm_text_response)
-    rumor_verifier_data = None
-    if claim:
-        print(f"Found claim: '{claim}'. Searching web for verification...")
-        search_results = await serper_client.search(claim)
-        if search_results:
-            verification_result = await verify_claim_with_sources(claim, search_results)
-            rumor_verifier_data = RumorVerifierResult(**verification_result, claim=claim)
+    # --- 3. Parallel Critics: Run Claim Extractor & Hallucination Check concurrently ---
+    claim_extraction_task = extract_verifiable_claim(llm_text_response)
+    hallucination_check_task = check_for_hallucinations(llm_text_response)
 
-    # --- 4. V1 Outbound Check: Custom Policy ---
+    claim_response, hallucination_verdict = await asyncio.gather(
+        claim_extraction_task,
+        hallucination_check_task
+    )
+
+    # --- 4. Web Search & Verification Flow (The "Chain of Investigation") ---
+    rumor_verifier_data = None
+    if claim_response and claim_response.claim:
+        claim_text = claim_response.claim
+        source_snippets = await web_search(claim_text)
+        
+        if source_snippets:
+            # Call the real Synthesizing Verifier agent
+            verification_result = await verify_claim_with_sources(
+                claim=claim_text, 
+                sources=source_snippets
+            )
+            
+            # Populate our response model with the verified, structured data
+            rumor_verifier_data = RumorVerifierResult(
+                verdict=verification_result.verdict,
+                claim=claim_text,
+                reasoning=verification_result.reasoning,
+                sources_consulted=source_snippets
+            )
+
+    # --- 5. Outbound Check: Custom Policy ---
     policy_check = await check_custom_policy(text_to_check=llm_text_response, policy=request.policy)
     final_response_text = llm_text_response
     if policy_check.verdict == "FAIL":
         final_response_text = f"[POLICY WARNING: {policy_check.reasoning}] {llm_text_response}"
 
-    # --- 5. Final V2 Immutable Logging ---
+    # --- 6. Final Immutable Logging ---
     log_entry = log_models.LogCreate(
         request_data={"prompt": request.prompt, "policy": request.policy},
         response_data={
             "llm_response": final_response_text,
             "inbound_check": security_check.model_dump(),
             "outbound_check": policy_check.model_dump(),
+            "hallucination_check": hallucination_verdict.model_dump(),
             "rumor_verifier": rumor_verifier_data.model_dump() if rumor_verifier_data else None,
         },
         verdict="ALLOWED"
     )
     crud_log.create_log(db=db, log_in=log_entry)
 
-    # --- 6. Send Final Enriched Response ---
+    # --- 7. Send Final Enriched Response ---
     return GatewayResponse(
         llm_response=final_response_text,
         inbound_check=security_check,
         outbound_check=policy_check,
+        hallucination_check=hallucination_verdict,
         rumor_verifier=rumor_verifier_data
     )

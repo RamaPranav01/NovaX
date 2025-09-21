@@ -2,7 +2,7 @@ from langchain_core.prompts import ChatPromptTemplate
 from langchain_core.pydantic_v1 import BaseModel, Field, ValidationError
 from langchain_core.output_parsers import PydanticOutputParser , StrOutputParser
 from langchain_core.runnables import Runnable
-from langchain_google_vertexai import ChatVertexAI
+from langchain_google_genai import ChatGoogleGenerativeAI
 from typing import Literal, Optional, List , Any ,Dict 
 
 class CriticResponse(BaseModel):
@@ -64,10 +64,9 @@ class DeepfakeAnalysisConclusion(BaseModel):
     )    
 
 # --- INITIALIZIng THE CORE AI MODEL (GEMINI) ---
-model = ChatVertexAI(
-    model="gemini-1.5-pro-001",
-    temperature=0.0,
-    convert_system_message_to_human=True 
+model = ChatGoogleGenerativeAI(
+    model="gemini-2.5-flash", 
+    temperature=0.0
 )
 
 

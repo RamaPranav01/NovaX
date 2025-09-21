@@ -1,38 +1,68 @@
 "use client";
 
 import { useState } from "react";
+import { useRouter } from "next/navigation"; 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
 import Link from "next/link";
-import { Shield } from "lucide-react";
+import { Shield, AlertCircle } from "lucide-react";
 
 export default function SignupPage() {
+  const router = useRouter(); // Hook for navigation
   const [formData, setFormData] = useState({
+    // We don't need 'name' for the backend, but it's good UX to keep it here.
+    // The backend signup endpoint only requires email and password.
     name: "",
     email: "",
     password: "",
     confirmPassword: "",
   });
   const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null); // State for handling errors
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsLoading(true);
+    setError(null);
+
+    // --- Client-side validation ---
+    if (formData.password !== formData.confirmPassword) {
+      setError("Passwords do not match.");
+      setIsLoading(false);
+      return;
+    }
+
+    const apiUrl = process.env.NEXT_PUBLIC_API_URL;
     
     try {
-      // TODO: Implement actual signup logic with backend when auth endpoints are ready
-      console.log("Signup attempt:", formData);
-      
-      // For now, simulate successful signup
-      setTimeout(() => {
-        setIsLoading(false);
-        // Redirect to dashboard on successful signup
-        window.location.href = '/dashboard';
-      }, 1000);
-    } catch (error) {
-      console.error("Signup error:", error);
+      const response = await fetch(`${apiUrl}/api/v1/signup`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        // Send only the data the backend endpoint expects
+        body: JSON.stringify({
+          email: formData.email,
+          password: formData.password,
+        }),
+      });
+
+      if (!response.ok) {
+        // Handle specific error messages from the backend
+        const errorData = await response.json();
+        throw new Error(errorData.detail || "Signup failed. Please try again.");
+      }
+
+      // On successful signup, redirect the user to the login page
+      // to sign in with their new credentials.
+      router.push("/login");
+
+    } catch (err) {
+      // Set the error state to display the message in the UI
+      setError(err instanceof Error ? err.message : "An unknown error occurred.");
+    } finally {
       setIsLoading(false);
     }
   };
@@ -46,7 +76,6 @@ export default function SignupPage() {
 
   return (
     <div className="space-y-6">
-      {/* Header with Logo */}
       <div className="text-center">
         <Link href="/" className="inline-flex items-center space-x-3 hover:opacity-80 transition-opacity">
           <div className="p-2 rounded-lg bg-primary/10">
@@ -67,6 +96,7 @@ export default function SignupPage() {
         </CardHeader>
         <CardContent className="space-y-4">
           <form onSubmit={handleSubmit} className="space-y-4">
+            {/* We can keep the name field for future use or UX, even if not sent to the backend */}
             <div className="space-y-2">
               <Label htmlFor="name" className="text-foreground">Full Name</Label>
               <Input
@@ -99,10 +129,11 @@ export default function SignupPage() {
                 id="password"
                 name="password"
                 type="password"
-                placeholder="Create a password"
+                placeholder="Create a password (min 8 characters)"
                 value={formData.password}
                 onChange={handleChange}
                 className="h-10"
+                minLength={8}
                 required
               />
             </div>
@@ -119,6 +150,15 @@ export default function SignupPage() {
                 required
               />
             </div>
+
+            {/* Display error messages */}
+            {error && (
+              <div className="flex items-center space-x-2 text-sm text-red-500 bg-red-500/10 p-2 rounded-md">
+                <AlertCircle className="h-4 w-4" />
+                <span>{error}</span>
+              </div>
+            )}
+
             <Button type="submit" className="w-full h-10" disabled={isLoading}>
               {isLoading ? "Creating account..." : "Create account"}
             </Button>
@@ -134,4 +174,4 @@ export default function SignupPage() {
       </Card>
     </div>
   );
-} 
+}

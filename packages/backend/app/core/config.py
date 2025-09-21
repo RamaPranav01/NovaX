@@ -30,7 +30,7 @@ class Settings(BaseSettings):
 
     # --- NEW: External Service Keys ---
     SERPER_API_KEY: str
-    GOOGLE_CLOUD_PROJECT:str
+    GOOGLE_API_KEY: str
 
 # Create the single, reusable instance of the settings.
 settings = Settings()
