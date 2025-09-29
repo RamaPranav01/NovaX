@@ -2,15 +2,22 @@
 name = "nova-backend"
 version = "0.1.0"
 description = "The Universal Trust Layer for AI - Backend Service"
-authors = ["Sanjana <ranasanjana60@gmail.com>", "Rama Pranav <gantiramapranav@gmail.com>"] 
+authors = ["Sanjana <ranasanjana60@gmail.com>", "Rama Pranav <gantiramapranav@gmail.com>"]
 packages = [{include = "app"}]
 
 [tool.poetry.dependencies]
 python = ">=3.10, <4.0"
-langchain-google-genai = "2.1.12"
+
+# LangChain dependencies (all compatible)
+langchain = "^0.3.0"
+langchain-core = "^0.3.75"
+langchain-community = "^0.3.0"
+langchain-google-genai = "^2.1.12"
+langchain-openai = "^0.2.0"
+
+# Other dependencies
 pydantic = ">=2.11.7,<3.0.0"
 python-dotenv = ">=1.1.1,<2.0.0"
-
 fastapi = "^0.111.0"
 uvicorn = {extras = ["standard"], version = "^0.30.1"}
 sqlalchemy = "^2.0.31"
@@ -18,9 +25,6 @@ psycopg2-binary = "^2.9.9"
 asyncpg = "^0.29.0"
 pydantic-settings = "^2.3.4"
 qdrant-client = "^1.9.0"
-langchain = "^0.2.11"
-langchain-community = "^0.2.11"
-langchain-core = "^0.2.14"
 python-jose = {extras = ["cryptography"], version = "^3.5.0"}
 passlib = {extras = ["bcrypt"], version = "^1.7.4"}
 alembic = "^1.13.1"
@@ -35,4 +39,3 @@ mypy = "^1.10.1"
 [build-system]
 requires = ["poetry-core>=2.0.0,<3.0.0"]
 build-backend = "poetry.core.masonry.api"
-

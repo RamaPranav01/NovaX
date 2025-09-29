@@ -82,6 +82,7 @@ export default function DemoPage() {
         id: (Date.now() + 1).toString(),
         text: `Error: ${error.message}` || "Failed to get a response from the server.",
         sender: "ai",
+        timestamp: new Date(),
       };
       setProtectedMessages(prev => [...prev, errorMessage]);
     } finally {

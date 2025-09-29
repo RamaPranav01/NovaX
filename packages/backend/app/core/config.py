@@ -32,5 +32,8 @@ class Settings(BaseSettings):
     SERPER_API_KEY: str
     GOOGLE_API_KEY: str
 
+    # --- ADD THIS LINE ---
+    USE_MOCK_SERVICES: bool = False
+
 # Create the single, reusable instance of the settings.
 settings = Settings()

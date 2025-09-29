@@ -20,8 +20,8 @@ from app.services.ai_critics import (
     extract_verifiable_claim,
     verify_claim_with_sources,
     check_for_hallucinations,
-    SecurityCritic_Response,
-    PolicyCritic_Response,
+    SecurityCriticResponse,
+    PolicyCriticResponse,
     ClaimExtractorResponse,
     VerificationResponse,
     HallucinationVerdict
@@ -44,8 +44,8 @@ class RumorVerifierResult(BaseModel):
 class GatewayResponse(BaseModel):
     """The unified response model, including all V1 and V2 checks."""
     llm_response: str
-    inbound_check: SecurityCritic_Response
-    outbound_check: PolicyCritic_Response
+    inbound_check: SecurityCriticResponse
+    outbound_check: PolicyCriticResponse
     hallucination_check: HallucinationVerdict
     rumor_verifier: Optional[RumorVerifierResult] = None
 
