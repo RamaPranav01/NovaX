@@ -10,7 +10,7 @@ from pydantic import BaseModel, Field
 from typing import List, Optional
 from sqlalchemy.orm import Session
 from . import deps
-from app.schemas.user import User
+# from app.schemas.user import User
 from app.crud import crud_log
 from app.models import log as log_models
 
@@ -49,14 +49,35 @@ class GatewayResponse(BaseModel):
     hallucination_check: HallucinationVerdict
     rumor_verifier: Optional[RumorVerifierResult] = None
 
+class UnprotectedResponse(BaseModel):
+    llm_response: str
+
 # --- API Router ---
 router = APIRouter()
+
+@router.post("/unprotected-chat", response_model=UnprotectedResponse, tags=["Gateway V2"])
+async def unprotected_chat(
+    request: GatewayRequest,
+):
+    """
+    An unprotected endpoint that directly calls the primary LLM without any security checks.
+    """
+    if not primary_llm:
+        raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="Primary Language Model client not configured.")
+
+    try:
+        llm_response = await primary_llm.ainvoke(request.prompt)
+        llm_text_response = llm_response.content
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error calling primary LLM: {e}")
+
+    return UnprotectedResponse(llm_response=llm_text_response)
 
 @router.post("/nova-chat", response_model=GatewayResponse, tags=["Gateway V2"])
 async def nova_chat(
     request: GatewayRequest,
-    db: Session = Depends(deps.get_db),
-    current_user: User = Depends(deps.get_current_user)
+    db: Session = Depends(deps.get_db)
+    # current_user: User = Depends(deps.get_current_user)
 ):
     """
     The main V2 endpoint for the Nova gateway.

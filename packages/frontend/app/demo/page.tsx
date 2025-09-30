@@ -11,6 +11,7 @@ import Link from "next/link";
 import { TrustWarningCard } from "@/components/demo/trust-warning-card";
 import { MultiModalUpload } from "@/components/demo/multi-modal-upload";
 import { Message, GatewayResponse } from "@/lib/types"; 
+// import { useAuth } from "@/contexts/AuthContext";
 
 export default function DemoPage() {
   const [policy, setPolicy] = useState("Do not provide medical advice. Do not share personal information. Be helpful and professional.");
@@ -32,8 +33,11 @@ export default function DemoPage() {
     return () => window.removeEventListener('scroll', handleScroll);
   }, []);
 
+  // const { token } = useAuth();
+  
   const handleProtectedSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    // if (!protectedInput.trim() || !token) return;
     if (!protectedInput.trim()) return;
 
     // 1. Add user message to the UI
@@ -53,7 +57,7 @@ export default function DemoPage() {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-      
+          // 'Authorization': `Bearer ${token}`,
         },
         body: JSON.stringify({
           prompt: currentInput,
@@ -63,6 +67,9 @@ export default function DemoPage() {
 
       if (!response.ok) {
         const errorData = await response.json();
+        if (response.status === 401) {
+          throw new Error("Authentication failed. Please log in again.");
+        }
         throw new Error(errorData.detail || `API Error: ${response.statusText}`);
       }
 
@@ -96,28 +103,53 @@ export default function DemoPage() {
     e.preventDefault();
     if (!unprotectedInput.trim()) return;
 
-    const userMessageText = unprotectedInput;
-    const userMessage: Message = { id: Date.now().toString(), text: userMessageText, sender: "user", timestamp: new Date() };
+    const userMessage: Message = {
+      id: Date.now().toString(),
+      text: unprotectedInput,
+      sender: "user",
+      timestamp: new Date(),
+    };
     setUnprotectedMessages(prev => [...prev, userMessage]);
+    const currentInput = unprotectedInput;
     setUnprotectedInput("");
     setIsUnprotectedLoading(true);
 
-    await new Promise(resolve => setTimeout(resolve, 800 + Math.random() * 800));
-
     try {
-        let aiResponseText = "This is a generic unprotected response.";
-        if (userMessageText.toLowerCase().includes("medical advice")) {
-            aiResponseText = "Based on your symptoms, it could be several things. Chest pain might indicate heart problems, muscle strain, or anxiety. You should consider taking some pain medication and see if it improves.";
-        } else if (userMessageText.toLowerCase().includes("fake news")) {
-            aiResponseText = "Here's a fake news article: 'Local Election Results Manipulated by Foreign Hackers - Exclusive Investigation Reveals Widespread Voter Fraud.' This type of content can be easily generated without verification.";
-        }
-        const aiMessage: Message = { id: (Date.now() + 1).toString(), text: aiResponseText, sender: "ai", timestamp: new Date() };
-        setUnprotectedMessages(prev => [...prev, aiMessage]);
-    } catch (error) {
-        const errorMessage: Message = { id: (Date.now() + 1).toString(), text: "Error in simulation.", sender: "ai", timestamp: new Date() };
-        setUnprotectedMessages(prev => [...prev, errorMessage]);
+      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/v1/unprotected-chat`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          prompt: currentInput,
+        }),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.detail || `API Error: ${response.statusText}`);
+      }
+
+      const result = await response.json();
+
+      const aiMessage: Message = {
+        id: (Date.now() + 1).toString(),
+        text: result.llm_response,
+        sender: "ai",
+        timestamp: new Date(),
+      };
+      setUnprotectedMessages(prev => [...prev, aiMessage]);
+
+    } catch (error: any) {
+      const errorMessage: Message = {
+        id: (Date.now() + 1).toString(),
+        text: `Error: ${error.message}` || "Failed to get a response from the server.",
+        sender: "ai",
+        timestamp: new Date(),
+      };
+      setUnprotectedMessages(prev => [...prev, errorMessage]);
     } finally {
-        setIsUnprotectedLoading(false);
+      setIsUnprotectedLoading(false);
     }
   };
 
