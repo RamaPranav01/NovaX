@@ -104,5 +104,5 @@ This project is licensed under the **MIT License**. See the [LICENSE](LICENSE) f
 ---
 
 <p align="center">
-  A project by Rama Pranav, Sanjana, Tejsai, and Shlok. If you like our work, please ⭐ this repository!
+  A project by Rama Pranav, Sanjana, Tejsai, Shlok and Pradyun. If you like our work, please ⭐ this repository!
 </p>
